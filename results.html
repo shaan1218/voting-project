@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Voting Results</title>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 50%; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    th { background-color: #f0f0f0; }
+  </style>
+</head>
+<body>
+
+  <h2>Voting Results</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Candidate</th>
+        <th>Votes</th>
+      </tr>
+    </thead>
+    <tbody id="resultsTable">
+      <!-- Results will be inserted here -->
+    </tbody>
+  </table>
+
+  <script>
+    const currentUser = localStorage.getItem("currentUser");
+    if (currentUser !== "admin") {
+      alert("Access denied. Only admin can view results.");
+      window.location.href = "auth.html";
+    }
+
+    function countVotes() {
+      const candidates = JSON.parse(localStorage.getItem("candidates")) || [];
+      const results = {};
+      candidates.forEach(c => results[c] = 0);
+
+      // Iterate all keys in localStorage to find votes
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith("vote_")) {
+          const votedFor = localStorage.getItem(key);
+          if (results[votedFor] !== undefined) {
+            results[votedFor]++;
+          }
+        }
+      }
+
+      return results;
+    }
+
+    function displayResults() {
+      const resultData = countVotes();
+      const tbody = document.getElementById("resultsTable");
+      tbody.innerHTML = "";
+
+      for (const [candidate, count] of Object.entries(resultData)) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${candidate}</td><td>${count}</td>`;
+        tbody.appendChild(row);
+      }
+    }
+
+    displayResults();
+  </script>
+
+</body>
+</html>
+

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Voting Page</title>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { margin: 5px 0; padding: 8px; }
+    #admin-section, #results-section, #timerPanel {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+    table { border-collapse: collapse; margin-top: 10px; width: 50%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #eee; }
+    #timerDisplay { font-weight: bold; color: red; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>Welcome, <span id="user"></span></h2>
+  <button onclick="logout()" style="position: fixed; top: 10px; right: 10px;">Logout</button>
+
+  <!-- Admin-only section -->
+  <div id="admin-section" style="display:none;">
+    <h3>Set Voting Question (Admin Only)</h3>
+    <form onsubmit="return setQuestion()">
+      <input type="text" id="questionInput" placeholder="Enter your question..." required />
+      <button type="submit">Save Question</button>
+    </form>
+
+    <h3>Add Voting Options (Admin Only)</h3>
+    <form onsubmit="return addCandidate()">
+      <input type="text" id="newCandidate" placeholder="New Candidate" required />
+      <button type="submit">Add Option</button>
+    </form>
+  </div>
+
+  <!-- Voting question and timer -->
+  <h3 id="votingQuestion">Loading question...</h3>
+  <div id="timerDisplay"></div>
+
+  <!-- Voting form -->
+  <form id="voteForm" onsubmit="return submitVote()">
+    <div id="candidateList"></div>
+    <button type="submit">Submit Vote</button>
+  </form>
+
+  <!-- Admin-only vote results -->
+  <div id="results-section" style="display:none;">
+    <h3>Current Vote Count (Admin Only)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th>Votes</th>
+        </tr>
+      </thead>
+      <tbody id="resultsTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Admin-only timer -->
+  <div id="timerPanel" style="display:none;">
+    <h4>Set Voting Timer (minutes):</h4>
+    <input type="number" id="timerInput" placeholder="e.g. 1" min="1">
+    <button onclick="startTimer()">Start Timer</button>
+  </div>
+
+  <script>
+    const currentUser = localStorage.getItem("currentUser");
+    if (!currentUser) {
+      alert("Please log in first.");
+      window.location.href = "auth.html";
+    }
+
+    document.getElementById("user").textContent = currentUser;
+    const isAdmin = (currentUser === "admin" || currentUser === "shaan" || currentUser === "admin1" || currentUser === "admin2");
+
+    document.getElementById("admin-section").style.display = isAdmin ? "block" : "none";
+    document.getElementById("results-section").style.display = isAdmin ? "block" : "none";
+    document.getElementById("timerPanel").style.display = isAdmin ? "block" : "none";
+
+    function loadQuestion() {
+      const question = localStorage.getItem("votingQuestion") || "Vote for Your Favorite";
+      document.getElementById("votingQuestion").textContent = question;
+    }
+
+    function setQuestion() {
+      const newQuestion = document.getElementById("questionInput").value.trim();
+      if (!newQuestion) return false;
+      localStorage.setItem("votingQuestion", newQuestion);
+      alert("Question updated!");
+      loadQuestion();
+      return false;
+    }
+
+    function loadCandidates() {
+      const candidates = JSON.parse(localStorage.getItem("candidates")) || [];
+      const container = document.getElementById("candidateList");
+      container.innerHTML = "";
+
+      if (candidates.length === 0) {
+        container.innerHTML = "<p>No candidates available. Admin must add options.</p>";
+        return;
+      }
+
+      candidates.forEach(candidate => {
+        const label = document.createElement("label");
+        label.innerHTML = `<input type="radio" name="candidate" value="${candidate}" required> ${candidate}`;
+        container.appendChild(label);
+        container.appendChild(document.createElement("br"));
+      });
+    }
+
+    function addCandidate() {
+      const name = document.getElementById("newCandidate").value.trim();
+      if (!name) return false;
+
+      let candidates = JSON.parse(localStorage.getItem("candidates")) || [];
+      if (candidates.includes(name)) {
+        alert("Candidate already exists!");
+        return false;
+      }
+
+      candidates.push(name);
+      localStorage.setItem("candidates", JSON.stringify(candidates));
+      document.getElementById("newCandidate").value = "";
+      loadCandidates();
+      if (isAdmin) displayResults();
+      return false;
+    }
+
+    function submitVote() {
+      const selected = document.querySelector('input[name="candidate"]:checked');
+      if (!selected) {
+        alert("Please select an option.");
+        return false;
+      }
+
+      const voteKey = `vote_${currentUser}`;
+      if (localStorage.getItem(voteKey)) {
+        alert("You have already voted!");
+        return false;
+      }
+
+      localStorage.setItem(voteKey, selected.value);
+      alert("Vote submitted for: " + selected.value);
+      if (isAdmin) displayResults();
+      return false;
+    }
+
+    function countVotes() {
+      const candidates = JSON.parse(localStorage.getItem("candidates")) || [];
+      const results = {};
+      candidates.forEach(c => results[c] = 0);
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith("vote_")) {
+          const vote = localStorage.getItem(key);
+          if (results[vote] !== undefined) {
+            results[vote]++;
+          }
+        }
+      }
+      return results;
+    }
+
+    function displayResults() {
+      const resultData = countVotes();
+      const tbody = document.getElementById("resultsTable");
+      tbody.innerHTML = "";
+
+      for (const [candidate, count] of Object.entries(resultData)) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${candidate}</td><td>${count}</td>`;
+        tbody.appendChild(row);
+      }
+    }
+
+    function startTimer() {
+      const minutes = parseInt(document.getElementById("timerInput").value);
+      if (!minutes || minutes <= 0) {
+        alert("Enter valid minutes");
+        return;
+      }
+      const endTime = Date.now() + minutes * 60 * 1000;
+      localStorage.setItem("voteEndTime", endTime);
+      alert(`Timer set for ${minutes} minute(s)`);
+      location.reload();
+    }
+
+    function checkTimerStatus() {
+      const end = parseInt(localStorage.getItem("voteEndTime"));
+      if (!end) return;
+
+      const now = Date.now();
+      const remaining = end - now;
+
+      if (remaining <= 0) {
+        document.getElementById("voteForm").style.display = "none";
+        document.getElementById("timerDisplay").textContent = "Voting is closed.";
+        return;
+      }
+
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      document.getElementById("timerDisplay").textContent = `Time left: ${minutes}m ${seconds}s`;
+      setTimeout(checkTimerStatus, 1000);
+    }
+
+    function logout() {
+      localStorage.removeItem("loggedIn");
+      localStorage.removeItem("currentUser");
+      window.location.href = "auth.html";
+    }
+
+    // Page load
+    loadQuestion();
+    loadCandidates();
+    if (isAdmin) displayResults();
+    checkTimerStatus();
+
+    // Access block
+    if (!localStorage.getItem("loggedIn")) {
+      alert("You must log in first.");
+      window.location.href = "auth.html";
+    }
+  </script>
+
+</body>
+</html>
+ 
